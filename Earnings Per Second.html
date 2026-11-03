@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Earnings Per Second</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--text:#1a1a1a;--muted:#6b6b66;--line:#e4e2da;--accent:#0f9d58;--bar:#e9e7df;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121212;--card:#1c1c1c;--text:#f0efe9;--muted:#9a9a93;--line:#2c2c2a;--accent:#3ddc84;--bar:#2a2a28;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121212;--card:#1c1c1c;--text:#f0efe9;--muted:#9a9a93;--line:#2c2c2a;--accent:#3ddc84;--bar:#2a2a28;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:24px 16px 40px}
+main{max-width:860px;margin:0 auto}
+h1{font-size:26px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 16px;font-size:15px}
+.top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.timer{font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px}
+button{font:inherit;font-size:14px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.name{font-weight:600;font-size:16px}
+.tag{color:var(--muted);font-size:13px;margin-bottom:10px}
+.rate{font-size:13px;color:var(--muted);margin-top:8px}
+.amt{font-variant-numeric:tabular-nums;font-size:26px;font-weight:700;color:var(--accent);word-break:break-all}
+.barwrap{height:6px;background:var(--bar);border-radius:3px;margin-top:10px;overflow:hidden}
+.bar{height:100%;background:var(--accent);border-radius:3px}
+.note{color:var(--muted);font-size:12px;margin-top:20px}
+.f{font-size:14px;color:var(--muted);display:flex;gap:6px;align-items:center}
+select,input{font:inherit;font-size:14px;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text)}
+input{width:80px}
+.words{font-size:13px;color:var(--muted);min-height:18px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Earnings per second</h1>
+  <p class="sub">Watch the money pile up while you sit here.</p>
+  <div class="top">
+    <label class="f">Currency <select id="cur"><option value="USD">US Dollar ($)</option><option value="INR">Indian Rupee (₹, lakh/crore)</option></select></label>
+    <label class="f" id="fxbox" style="display:none">1 USD = ₹ <input id="fx" type="number" step="0.01" min="1" value="96.5"></label>
+    <button id="toggle">Pause</button>
+    <button id="reset">Reset</button>
+    <span class="timer">Elapsed: <b id="t">0.0s</b></span>
+  </div>
+  <div class="top">
+    <label class="f">Jump to time <input id="tv" type="number" min="0" step="any" value="1"> <select id="tu"><option value="1">seconds</option><option value="60">minutes</option><option value="3600" selected>hours</option><option value="86400">days</option><option value="604800">weeks</option><option value="2592000">months</option><option value="31536000">years</option></select></label>
+    <button id="go">Show money at this time</button>
+  </div>
+  <div class="grid" id="grid"></div>
+  <p class="note">Billionaire rates = change in Forbes net worth between the March 2025 and March 2026 World’s Billionaires Lists, divided by the seconds in between. Ellison and Arnault are left out because their Forbes net worth fell over that window. Celebrity rates are rough yearly earnings estimates. Billionaire wealth is mostly stock value, not cash arriving. The rupee rate defaults to about ₹96.5 per dollar (a July 2026 quote), so edit it to today’s rate.</p>
+</main>
+<script>
+var YEAR = 365*24*3600;
+var S = 31017600; /* Mar 7 2025 to Mar 1 2026, in seconds */
+var people = [
+  {n:"Elon Musk",t:"Forbes gain: $342B → $839B",w:"Latest Forbes net worth: $908B (Sep 2026)",y:497e9,s:S},
+  {n:"Larry Page",t:"Forbes gain: $144B → $257B",w:"Latest Forbes net worth: $278B (Sep 2026)",y:113e9,s:S},
+  {n:"Sergey Brin",t:"Forbes gain: $138B → $237B",w:"Forbes net worth: $237B (Mar 2026)",y:99e9,s:S},
+  {n:"Jeff Bezos",t:"Forbes gain: $215B → $224B",w:"Latest Forbes net worth: $378B (Sep 2026)",y:9e9,s:S},
+  {n:"Mark Zuckerberg",t:"Forbes gain: $216B → $222B",w:"Forbes net worth: $222B (Mar 2026)",y:6e9,s:S},
+  {n:"Taylor Swift",t:"Estimated yearly earnings",w:"Forbes net worth: $2B (Mar 2026)",y:300e6},
+  {n:"Cristiano Ronaldo",t:"Estimated yearly earnings",w:"Not a Forbes net worth figure",y:260e6},
+  {n:"Dwayne Johnson",t:"Estimated yearly earnings",w:"Not a Forbes net worth figure",y:88e6},
+  {n:"MrBeast",t:"Estimated yearly earnings",w:"Not a Forbes net worth figure",y:85e6},
+  {n:"Average US worker",t:"For comparison · ~$60k/yr",w:"",y:60000}
+];
+var max = Math.max.apply(null, people.map(function(p){return p.y/(p.s||YEAR)}));
+var grid = document.getElementById("grid");
+var cur = "USD", fx = 96.5;
+function fmt(x){
+  if(cur==="INR") return "₹"+(x*fx).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+  return "$"+x.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function words(x){
+  if(cur!=="INR") return "";
+  var v = x*fx;
+  if(v>=1e12) return "≈ "+(v/1e12).toFixed(2)+" lakh crore";
+  if(v>=1e7) return "≈ "+(v/1e7).toFixed(2)+" crore";
+  if(v>=1e5) return "≈ "+(v/1e5).toFixed(2)+" lakh";
+  return "";
+}
+people.forEach(function(p){
+  p.r = p.y/(p.s||YEAR);
+  var d = document.createElement("div");
+  d.className = "card";
+  d.innerHTML = '<div class="name">'+p.n+'</div><div class="tag">'+p.t+(p.w?'<br>'+p.w:'')+'</div><div class="amt">$0.00</div><div class="words"></div>'+
+    '<div class="rate"></div><div class="barwrap"><div class="bar" style="width:'+Math.max(1.5,p.r/max*100)+'%"></div></div>';
+  p.el = d.querySelector(".amt");
+  p.wl = d.querySelector(".words");
+  p.rl = d.querySelector(".rate");
+  grid.appendChild(d);
+});
+var elapsed = 0, last = performance.now(), running = true;
+function tick(now){
+  if(running){ elapsed += (now-last)/1000; }
+  last = now;
+  people.forEach(function(p){
+    p.el.textContent = fmt(p.r*elapsed);
+    p.wl.textContent = words(p.r*elapsed);
+    p.rl.textContent = fmt(p.r)+" per second"+(words(p.r)?" ("+words(p.r).slice(2)+")":"");
+  });
+  document.getElementById("t").textContent = dur(elapsed);
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+document.getElementById("toggle").onclick = function(){
+  running = !running; this.textContent = running ? "Pause" : "Resume";
+};
+document.getElementById("reset").onclick = function(){ elapsed = 0; };
+document.getElementById("cur").onchange = function(){
+  cur = this.value;
+  document.getElementById("fxbox").style.display = cur==="INR" ? "flex" : "none";
+};
+document.getElementById("fx").oninput = function(){ var v = parseFloat(this.value); if(v>0) fx = v; };
+function dur(s){
+  var y=Math.floor(s/31536000); s-=y*31536000;
+  var d=Math.floor(s/86400); s-=d*86400;
+  var h=Math.floor(s/3600); s-=h*3600;
+  var m=Math.floor(s/60); s-=m*60;
+  var a=[]; if(y)a.push(y+"y"); if(d)a.push(d+"d"); if(h)a.push(h+"h"); if(m)a.push(m+"m");
+  a.push(s.toFixed(1)+"s"); return a.join(" ");
+}
+document.getElementById("go").onclick = function(){
+  var v = parseFloat(document.getElementById("tv").value);
+  if(!(v>=0)) return;
+  elapsed = v*parseFloat(document.getElementById("tu").value);
+  running = false;
+  document.getElementById("toggle").textContent = "Resume";
+};
+</script>
+</body>
+</html>
